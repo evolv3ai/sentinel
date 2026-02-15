@@ -167,7 +167,7 @@ func (c *Collector) collectContainerMetrics(queryTimeInUnixString string) {
 		go func() {
 			defer wg.Done()
 			for container := range containersChan {
-				containerNameFromLabel := container.Labels["coolify.name"]
+				containerNameFromLabel := container.Labels[c.config.ContainerNameLabel]
 				if containerNameFromLabel == "" {
 					// Safe name extraction with bounds checking
 					if len(container.Names) > 0 && len(container.Names[0]) > 1 {

@@ -16,6 +16,7 @@ type Config struct {
 	CollectorEnabled             bool
 	CollectorRetentionPeriodDays int
 	BindAddr                     string
+	ContainerNameLabel           string
 }
 
 func NewDefaultConfig() *Config {
@@ -33,5 +34,6 @@ func NewDefaultConfig() *Config {
 		CollectorEnabled:             false,
 		CollectorRetentionPeriodDays: 7,
 		BindAddr:                     ":8888",
+		ContainerNameLabel:           "coolify.name",
 	}
 }

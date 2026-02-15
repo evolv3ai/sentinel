@@ -87,15 +87,29 @@ func Execute() error {
 	}
 	config.Token = tokenFromEnv
 
-	if config.Endpoint == "" && endpointFromEnv == "" {
-		return fmt.Errorf("PUSH_ENDPOINT environment variable is required")
+	if pushEnabledFromEnv := os.Getenv("PUSH_ENABLED"); pushEnabledFromEnv != "" {
+		var err error
+		config.PushEnabled, err = strconv.ParseBool(pushEnabledFromEnv)
+		if err != nil {
+			log.Printf("Error parsing PUSH_ENABLED: %v", err)
+		}
 	}
 
-	if config.Endpoint == "" {
-		config.Endpoint = endpointFromEnv
-	}
+	if config.PushEnabled {
+		if config.Endpoint == "" && endpointFromEnv == "" {
+			return fmt.Errorf("PUSH_ENDPOINT environment variable is required")
+		}
 
-	config.PushUrl = config.Endpoint + config.PushPath
+		if config.Endpoint == "" {
+			config.Endpoint = endpointFromEnv
+		}
+
+		if pushPathFromEnv := os.Getenv("PUSH_PATH"); pushPathFromEnv != "" {
+			config.PushPath = pushPathFromEnv
+		}
+
+		config.PushUrl = config.Endpoint + config.PushPath
+	}
 
 	if pushIntervalSecondsFromEnv := os.Getenv("PUSH_INTERVAL_SECONDS"); pushIntervalSecondsFromEnv != "" {
 		pushIntervalSecondsInt, err := strconv.Atoi(pushIntervalSecondsFromEnv)
@@ -123,6 +137,14 @@ func Execute() error {
 				log.Printf("COLLECTOR_REFRESH_RATE_SECONDS must be greater than 0, using default value: %d", config.RefreshRateSeconds)
 			}
 		}
+	}
+
+	if containerNameLabelFromEnv := os.Getenv("CONTAINER_NAME_LABEL"); containerNameLabelFromEnv != "" {
+		config.ContainerNameLabel = containerNameLabelFromEnv
+	}
+
+	if bindAddrFromEnv := os.Getenv("BIND_ADDR"); bindAddrFromEnv != "" {
+		config.BindAddr = bindAddrFromEnv
 	}
 
 	if collectorRetentionPeriodDaysFromEnv := os.Getenv("COLLECTOR_RETENTION_PERIOD_DAYS"); collectorRetentionPeriodDaysFromEnv != "" {
@@ -160,10 +182,12 @@ func Execute() error {
 		return nil
 	})
 
-	group.Go(func() error {
-		pusherService.Run(gCtx)
-		return nil
-	})
+	if config.PushEnabled {
+		group.Go(func() error {
+			pusherService.Run(gCtx)
+			return nil
+		})
+	}
 	// Collector
 	if config.CollectorEnabled {
 		group.Go(func() error {

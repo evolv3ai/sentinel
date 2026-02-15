@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var containerIdRegex = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+var containerIdRegex = regexp.MustCompile(`[^a-zA-Z0-9_.-]+`)
 
 func (c *Controller) setupContainerRoutes() {
 	c.ginE.GET("/api/container/:containerId/cpu/history", func(ctx *gin.Context) {
@@ -84,7 +84,7 @@ func (c *Controller) setupContainerRoutes() {
 	})
 	c.ginE.GET("/api/container/:containerId/memory/history", func(ctx *gin.Context) {
 		containerID := strings.ReplaceAll(ctx.Param("containerId"), "/", "")
-		containerID = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(containerID, "")
+		containerID = containerIdRegex.ReplaceAllString(containerID, "")
 		from := ctx.Query("from")
 		if from == "" {
 			from = "1970-01-01T00:00:01Z"
