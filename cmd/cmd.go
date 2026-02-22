@@ -167,7 +167,7 @@ func Execute() error {
 		return err
 	}
 
-	server := api.New(config, database)
+	server := api.New(config, database, dockerHttpClient)
 	pusherService := push.New(config, dockerHttpClient)
 	collectorService := collector.New(config, database, dockerHttpClient)
 

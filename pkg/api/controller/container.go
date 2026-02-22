@@ -1,18 +1,117 @@
 package controller
 
 import (
+	"fmt"
+	"io"
 	"log"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/coollabsio/sentinel/pkg/json"
+	"github.com/coollabsio/sentinel/pkg/types"
+	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/gin-gonic/gin"
 )
 
 var containerIdRegex = regexp.MustCompile(`[^a-zA-Z0-9_.-]+`)
 
 func (c *Controller) setupContainerRoutes() {
+	// Live container list from Docker daemon
+	c.ginE.GET("/api/containers", func(ctx *gin.Context) {
+		incomingToken := ctx.GetHeader("Authorization")
+		if incomingToken != "Bearer "+c.config.Token {
+			ctx.JSON(401, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		resp, err := c.dockerClient.MakeRequest("/containers/json?all=true")
+		if err != nil {
+			ctx.JSON(500, gin.H{"error": fmt.Sprintf("docker api error: %v", err)})
+			return
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			ctx.JSON(500, gin.H{"error": fmt.Sprintf("read error: %v", err)})
+			return
+		}
+
+		var containers []dockerTypes.Container
+		if err := json.Unmarshal(body, &containers); err != nil {
+			ctx.JSON(500, gin.H{"error": fmt.Sprintf("unmarshal error: %v", err)})
+			return
+		}
+
+		var result []types.Container
+		for _, container := range containers {
+			name := ""
+			if len(container.Names) > 0 && len(container.Names[0]) > 1 {
+				name = container.Names[0][1:]
+			} else if len(container.Names) > 0 {
+				name = container.Names[0]
+			} else {
+				name = container.ID[:12]
+			}
+
+			// Get health status via inspect
+			healthStatus := "unknown"
+			inspResp, err := c.dockerClient.MakeRequest(fmt.Sprintf("/containers/%s/json", container.ID))
+			if err == nil {
+				defer inspResp.Body.Close()
+				inspBody, err := io.ReadAll(inspResp.Body)
+				if err == nil {
+					var inspectData dockerTypes.ContainerJSON
+					if err := json.Unmarshal(inspBody, &inspectData); err == nil {
+						if inspectData.State != nil && inspectData.State.Health != nil {
+							healthStatus = inspectData.State.Health.Status
+						}
+					}
+				}
+			}
+
+			result = append(result, types.Container{
+				Time:         time.Now().Format("2006-01-02T15:04:05Z"),
+				ID:           container.ID,
+				Image:        container.Image,
+				Name:         name,
+				State:        container.State,
+				Labels:       container.Labels,
+				HealthStatus: healthStatus,
+			})
+		}
+		ctx.JSON(200, result)
+	})
+
+	// Disk usage endpoint
+	c.ginE.GET("/api/disk", func(ctx *gin.Context) {
+		incomingToken := ctx.GetHeader("Authorization")
+		if incomingToken != "Bearer "+c.config.Token {
+			ctx.JSON(401, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		fs := syscall.Statfs_t{}
+		if err := syscall.Statfs("/", &fs); err != nil {
+			ctx.JSON(500, gin.H{"error": fmt.Sprintf("statfs error: %v", err)})
+			return
+		}
+
+		total := fs.Blocks * uint64(fs.Bsize)
+		free := fs.Bfree * uint64(fs.Bsize)
+		used := total - free
+		pct := float64(used) / float64(total) * 100
+
+		ctx.JSON(200, gin.H{
+			"total":       total,
+			"used":        used,
+			"free":        free,
+			"usedPercent": pct,
+		})
+	})
 	c.ginE.GET("/api/container/:containerId/cpu/history", func(ctx *gin.Context) {
 		containerID := strings.ReplaceAll(ctx.Param("containerId"), "/", "")
 		containerID = containerIdRegex.ReplaceAllString(containerID, "")

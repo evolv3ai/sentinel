@@ -7,6 +7,7 @@ import (
 	"github.com/coollabsio/sentinel/pkg/api/controller"
 	"github.com/coollabsio/sentinel/pkg/config"
 	"github.com/coollabsio/sentinel/pkg/db"
+	"github.com/coollabsio/sentinel/pkg/dockerClient"
 )
 
 type Api struct {
@@ -14,8 +15,8 @@ type Api struct {
 	srv        *http.Server
 }
 
-func New(config *config.Config, database *db.Database) *Api {
-	controller := controller.New(config, database)
+func New(config *config.Config, database *db.Database, dc *dockerClient.DockerClient) *Api {
+	controller := controller.New(config, database, dc)
 	controller.SetupRoutes()
 	if config.Debug {
 		controller.SetupDebugRoutes()

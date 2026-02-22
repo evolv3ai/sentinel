@@ -5,20 +5,23 @@ import (
 
 	"github.com/coollabsio/sentinel/pkg/config"
 	"github.com/coollabsio/sentinel/pkg/db"
+	"github.com/coollabsio/sentinel/pkg/dockerClient"
 	"github.com/gin-gonic/gin"
 )
 
 type Controller struct {
-	database *db.Database
-	ginE     *gin.Engine
-	config   *config.Config
+	database     *db.Database
+	ginE         *gin.Engine
+	config       *config.Config
+	dockerClient *dockerClient.DockerClient
 }
 
-func New(config *config.Config, database *db.Database) *Controller {
+func New(config *config.Config, database *db.Database, dc *dockerClient.DockerClient) *Controller {
 	return &Controller{
-		database: database,
-		ginE:     gin.Default(),
-		config:   config,
+		database:     database,
+		ginE:         gin.Default(),
+		config:       config,
+		dockerClient: dc,
 	}
 }
 
